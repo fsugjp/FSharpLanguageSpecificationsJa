@@ -1,5 +1,7 @@
 # F# 3.1 言語仕様(ワーキングドラフト)
 
+> 原文： http://fsharp.org/specs/language-spec/3.1/FSharpSpec-3.1-working.docx
+
 > 注釈：この文章はMicrosoftResearchおよびMicrosoftDeveloperDivisionによって
 > 2013年6月に作成された、F# 3.1リリース向けの言語仕様です。
 
