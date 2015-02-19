@@ -376,4 +376,85 @@ F#はCLI実装上で動作するため、F#から任意のCLIライブラリを�
 
 #### 1.1.7 並列および非同期プログラミング
 
+F#は*並列*かつ*リアクティブ*な言語です。
+F#プログラムの実行時には複数のアクティブな評価が並列して行われ、
+イベントやメッセージへの応答を待機しているようなコールバックやエージェントのように、
+応答が保留中になっているものも複数存在します。
+
+並列かつリアクティブなF#プログラムを作成するには、
+たとえば*非同期*式を使用します。
+具体的に言うと、以下のコードはセクション1.1にあるコードと似たところがありますが、
+ここでは(いくらか時間のかかるテクニックを使用して)フィボナッチ数を
+計算しています。
+ただし数値の計算処理は並列にスケジュールされています：
+
+```fsharp
+let rec fib x = if x < 2 then 1 else fib(x-1) + fib(x-2)
+
+let fibs =
+    Async.Parallel [ for i in 0..40 -> async { return fib(i) } ]
+    |> Async.RunSynchronously
+
+printfn "フィボナッチ数は%A" fibs
+
+System.Console.ReadKey(true)
+```
+
+このコードでは複数、並列、CPU依存の計算処理を行う例を示しています。
+
+F#はリアクティブな言語でもあります。
+以下の例では複数のWebページに対して並列にリクエストを出し、
+各リクエストに対するレスポンスを処理し、
+最終結果を集計しています。
+
+```fsharp
+open System
+open System.IO
+open System.Net
+
+let http url =
+    async { let req = WebRequest.Create(Uri url)
+            use! resp = req.AsyncGetResponse()
+            use stream = resp.GetResponseStream()
+            use reader = new StreamReader(stream)
+            let contents = reader.ReadToEnd()
+            return contents }
+
+let sites = [ "http://www.bing.com"; "http://www.google.com";
+              "http://www.yahoo.com"; "http://www.search.com" ]
+
+let htmlOfSites =
+    Async.Parallel [ for site in sites -> http site ]
+    |> Async.RunSynchronously
+```
+
+非同期ワークフローとその他のCLIライブラリとの機能を組み合わせる事によって、
+並列タスクや並列I/O処理、メッセージ受信エージェントといったF#プログラムを
+作成することができます。
+
+#### 1.1.8 厳密に型指定された浮動小数点数コード
+
+F#では*測定単位の推論およびチェック機能*によって、浮動小数点を扱う分野において
+型のチェックや推論を行う事ができるようになっています。
+この機能を使用する事により、
+物理的あるいは抽象的な量を表す浮動小数点数を
+他の言語には無いような厳密な方法でチェックできるようなプログラムを作成できます。
+コンパイル後のコードではパフォーマンスの劣化もありません。
+この機能は浮動小数点数を扱うコードに対する型システムととらえることができます。
+
+以下のような例を見てみましょう：
+
+```fsharp
+[<Measure>] type kg
+[<Measure>] type m
+[<Measure>] type s
+
+let gravityOnEarth = 9.81<m/s^2>
+let heightOfTowerOfPisa = 55.86<m>
+let speedOfImpact = sqrt(2.0 * gravityOnEarth * heightOfTowerOfPisa)
+```
+
+`Measure`属性を指定すると、F#では`kg` `s` `m`が通常の型ではなく、
+測定単位を定義するものだと認識されるようになります。
+今回の場合、`speedOfImpact`の型は`float<m/s>`だと推論されます。
 
