@@ -458,3 +458,172 @@ let speedOfImpact = sqrt(2.0 * gravityOnEarth * heightOfTowerOfPisa)
 測定単位を定義するものだと認識されるようになります。
 今回の場合、`speedOfImpact`の型は`float<m/s>`だと推論されます。
 
+#### 1.1.9 オブジェクト指向プログラミングとコードの構成
+
+この章の最初で出てきたサンプルプログラムは*スクリプト*です。
+スクリプトはプロトタイプを迅速に作成する用途にはうってつけですが、
+大きなソフトウェアコンポーネントを開発することにはあまり向いていません。
+F#ではいくつかのテクニックを駆使する事により、
+スクリプトを構造的なコードへと変換することができるようになっています。
+
+最も重要なテクニックとしては、クラス型の定義やインターフェイス型の定義、
+オブジェクト式といった機能を使用する*オブジェクト指向プログラミング*があります。
+オブジェクト指向プログラミングとは
+アプリケーションプログラミングインターフェイス(API)を設計する
+重要なテクニックであり、これによって巨大なソフトウェアプロジェクトを
+制御します。
+たとえば以下ではオブジェクトをエンコード/デコードするクラスを定義しています。
+
+```fsharp
+open System
+
+/// 文字と、エンコーディング後の文字との間をマッピングするような
+/// エンコーダー/デコーダーオブジェクトを定義します。
+/// エンコーディングは [('a','z'); ('Z','a')] というような
+/// 文字のペアのシーケンスとして指定します。
+
+type CharMapEncoder(symbols: seq<char*char>) =
+    let swpa (x, y) = (y, x)
+
+    /// エンコーディング用の不変なツリーマップ
+    let fwd = symbols |> Map.ofSeq
+
+    /// デコーディング用の不変なツリーマップ
+    let bwd = symbols |> Seq.map swap |> Map.ofSeq
+
+    let encode (s:string) =
+        String [| for c in s -> if fwd.ContainsKey(c) then fwd.[c] else c |]
+    let decode (s:string) =
+        String [| for c in s -> if bwd.ContainsKey(c) then bwd.[c] else c |]
+
+    /// 入力文字列をエンコード
+    member x.Encode(s) = encode s
+
+    /// 入力文字列をデコード
+    member x.Decode(s) = decode s
+```
+
+この型のオブジェクトのインスタンスは以下のようにして作成できます：
+
+```fsharp
+let rot13 (c:char) =
+    char(int 'a' + ((int c - int 'a' + 13) % 26))
+let encoder =
+    CharMapEncoder( [for c in 'a'..'z' -> (c, rot13 c)] )
+```
+
+そしてこのオブジェクトは以下のように使用できます：
+
+```text
+> "F# is fun!" |> encoder.Encode ;;
+val it : string = "F# vs sha!"
+
+> "F# is fun!" |> encoder.Encode |> encoder.Decode ;;
+val it : string = "F# is fun!"
+```
+
+インターフェイス型は一連のオブジェクトの型をカプセル化できます：
+
+```fsharp
+open System
+
+type IEncoding =
+    abstract Encode : string -> string
+    abstract Decode : string -> string
+```
+
+この例にある`IEncoding`は`Encode`と`Decode`というオブジェクトの型を
+両方含むようなインターフェイス型です。
+
+インターフェイスはオブジェクト式と型定義のいずれの方法でも実装できます。
+たとえば以下のコードではオブジェクト式を使用して
+`IEncoding`インターフェイス型を実装しています：
+
+```fsharp
+let nullEncoder =
+    { new IEncoding with
+        member x.Encode(s) = s
+        member x.Decode(s) = s }
+```
+
+*モジュール*はコードを簡単にカプセル化する方法の1つで、
+ラピッドプロトタイピングのように厳密なオブジェクト指向の型階層を設計することに
+あまり時間をかけたくないような場合に役立ちます。
+以下の例ではこの章で作成したサンプルコードをモジュール内に配置しています。
+
+```fsharp
+module ApplicationLogic =
+    let numbers n = [1 .. n]
+    let square x = x * x
+    let squares n = numbers n |> List.map square
+
+printfn "5までの平方数 = %A" (ApplicationLogic.squares 5)
+printfn "10までの平方数 = %A" (ApplicationLogic.squares 10)
+System.Console.ReadKey(true)
+```
+
+モジュールは型に特別な機能を持たせることができるよう、
+F#ライブラリ内で使用されることもあります。
+たとえば`List.map`はモジュール内の関数です。
+
+ソフトウェアエンジニアリングをサポートするメカニズムとして、
+コンポーネントに対して明示的に型を指定する*シグネチャ*や、
+膨大大なAPI群を特定の名前で階層毎にまとめることができる
+*名前空間*という機能もあります。
+
+#### 1.1.10 インフォメーションリッチプログラミング
+
+F#のインフォメーションリッチプログラミング(情報豊富なプログラミング)とは、
+データやサービス、情報などを最大限活用してプログラミングすることを指します。
+インフォメーションリッチプログラミングの重要なポイントは、
+インターネットや現代的なエンタープライズ環境において参照可能な情報ソースを
+活用する際に、障壁となるものを除去することにあります。
+F#におけるインフォメーションリッチプログラミングをサポートする重要な機能としては、
+型プロバイダーやクエリ式といったものがあります。
+
+F#の型プロバイダーメカニズムを使用する事によって、
+外部ソースとして存在するデータやサービスを厳密に型指定された方法で
+シームレスに活用できるようになります。
+*型プロバイダー*を使用すると、
+基本的には外部の情報ソースによるスキーマを元に定義された
+新しい型やメソッドがプログラム中で使用できるようになります。
+たとえば構造化問い合わせ言語(SQL: Structured Query Language)用の
+F#型プロバイダーでは、任意のSQLデータベースのテーブルを直接操作できるような
+型あるいはメソッドを利用できるようになります。
+
+```fsharp
+// FSharp.Data.TypeProviders, System.Data, System.Data.Linqの参照を追加しておく
+type schema = SqlDataConnection<"Data Source=localhost;Integrated Security=SSPI;">
+
+let db = schema.GetDataContext()
+```
+
+型プロバイダーはデータベースへ自動的に接続し、
+そこからIntelliSenseや型情報を取得します。
+
+(F# 3.0から追加された)クエリ式を使用すると、
+SQLやオープンデータプロトコル(OData: Open Data Protocol)、あるいはその他の
+構造的またはリレーショナルなデータソースに対してクエリベースのプログラミングを
+行う事ができるようになります。
+クエリ式ではF#における統合言語クエリ(LINQ: Language-Integrated Query)を
+サポートする他、追加されたクエリ演算子を使用する事でさらに複雑なクエリを
+作成することもできるようになっています。
+たとえばデータソース内の顧客情報をフィルタするクエリは以下のように作成できます：
+
+```fsharp
+let countOfCustomers =
+    query { for customer in db.Customers do
+            where (customer.LastName.StartsWith("N"))
+            select (customer.FirstName, customer.LastName) }
+```
+
+SQLデータベースやWeb上のデータプロトコル向けの型プロバイダが
+組み込みで用意されているため、エンタープライズやWeb、クラウド環境において
+これまでよりも手軽に重要なデータソースへとアクセスできるようになっています。
+必要であれば独自の型プロバイダーを作成したり、他者が作成した型プロバイダーを
+利用したりすることもできます。
+たとえば所属する組織において、特定のデータスキーマによって名前づけられた
+膨大なデータセットを抱えたデータサービスが公開されているとします。
+そうした場合、このスキーマを読み込むような型プロバイダを作成することにより、
+外部のプログラマが厳密に型指定された方法で最新のデータセットを
+利用できるようになります。
